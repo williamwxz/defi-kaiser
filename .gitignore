@@ -1,0 +1,66 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfplan
+.terraform.lock.hcl
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyenv
+venv/
+.env/
+*.egg-info/
+dist/
+build/
+
+# TypeScript
+dist/
+*.js.map
+*.d.ts
+
+# AWS
+.aws/
+*.pem
+*.key
+*.cer
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Lambda
+*.zip
+
+# Local development
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Misc
+*.bak
+*.tmp
+*.cache
