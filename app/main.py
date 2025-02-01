@@ -1,42 +1,36 @@
 # app/main.py
-from data import DataFetcher
-from strategies import RWAArbitrage, BerachainLPOptimizer, TradeSignal
+from data.fetcher import DataFetcher, Chain 
+from strategies.orchestrator import StrategyOrchestrator
 from execute import TradeExecutor
+from risk.manager import RiskManager
 import time
 
 def trading_loop():
     fetcher = DataFetcher()
-    rwa_arb = RWAArbitrage()
-    lp_optimizer = BerachainLPOptimizer()
+    strategy_orchestrator = StrategyOrchestrator()
     executor = TradeExecutor()
-    
+    risk_manager = RiskManager()
+
     while True:
         try:
             # Step 1: Fetch data
-            rwa_yields = fetcher.get_rwa_yields()
-            defi_rates = fetcher.get_defi_rates()
-            bera_pools = fetcher.get_bera_pools()
-            
+            rwa_prices = fetcher.get_rwa_prices()
+            bera_pools = fetcher.get_dex_pools(Chain.BERACHAIN)
+
             # Step 2: Generate signals
-            rwa_signals = rwa_arb.find_opportunities(rwa_yields, defi_rates)
-            best_pool = lp_optimizer.optimize(bera_pools)
-            
+            signals = strategy_orchestrator.run_strategies(rwa_prices, bera_pools)
+
             # Step 3: Execute trades
-            for signal in rwa_signals:
-                executor.safe_execute(signal)
-                
-            if best_pool:
-                # Example LP allocation signal
-                lp_signal = TradeSignal(
-                    asset=best_pool['pair'],
-                    amount=0.2,  # 20% allocation
-                    direction='ADD_LIQUIDITY'
-                )
-                executor.safe_execute(lp_signal)
-                
+            for signal in signals:
+                if risk_manager.approve_trade(signal):
+                    if 'asset' in signal:  # RWA arbitrage trade
+                        executor.execute_rwa_trade(signal)
+                    elif 'pool' in signal:  # Liquidity mining trade
+                        executor.execute_lp_trade(signal)
+
             # Cooldown period
             time.sleep(60)  # 1 min between iterations
-            
+
         except Exception as e:
             print(f"Critical error: {e}")
             time.sleep(300)  # Backoff on failure

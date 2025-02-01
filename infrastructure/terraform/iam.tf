@@ -28,6 +28,7 @@ resource "aws_iam_role" "eks_node_role" {
     Statement = [{
       Action = "sts:AssumeRole",
       Effect = "Allow",
+      Sid    = "NodeGroupIAMRole",
       Principal = {
         Service = "ec2.amazonaws.com"
       }
@@ -35,17 +36,21 @@ resource "aws_iam_role" "eks_node_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
+resource "aws_iam_role_policy_attachment" "nodegroup_policy_attachment" {
+  depends_on = [
+    aws_iam_role.eks_node_role
+  ]
+  for_each = toset([
+    "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+    "arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
+    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:aws:iam::aws:policy/SecretsManagerReadWrite",
+    "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+  ])
 
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
   role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_container_registry_readonly" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  policy_arn = each.value
 }

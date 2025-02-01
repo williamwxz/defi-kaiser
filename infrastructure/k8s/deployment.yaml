@@ -16,3 +16,12 @@ spec:
       containers:
       - name: defi-kaiser
         image: 598670062096.dkr.ecr.us-west-2.amazonaws.com/defi-kaiser:latest
+        ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"

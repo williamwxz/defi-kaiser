@@ -1,15 +1,36 @@
-resource "aws_vpc" "eks_vpc" {
-  cidr_block = "10.0.0.0/16"
+
+data "aws_availability_zones" "available" {
+  provider = aws.primary
 }
 
-resource "aws_subnet" "eks_subnet_a" {
-  vpc_id            = aws_vpc.eks_vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "us-west-2a"
+locals {
+  azs = slice(data.aws_availability_zones.available.names, 0, 3)
 }
 
-resource "aws_subnet" "eks_subnet_b" {
-  vpc_id            = aws_vpc.eks_vpc.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-west-2b"
+module "vpc" {
+  source = "terraform-aws-modules/vpc/aws"
+
+  name = "${var.prefix}-vpc"
+  cidr = var.vpc_cidr
+
+  azs             = slice(data.aws_availability_zones.available.names, 0, 3)
+  private_subnets = var.private_subnets_cidr
+  public_subnets  = var.public_subnets_cidr
+
+  enable_nat_gateway = true
+  enable_vpn_gateway = false
+
+  tags = {
+    Terraform = "true"
+  }
+
+  public_subnet_tags = {
+    "kubernetes.io/cluster/${var.prefix}-eks-cluster" = "shared"
+    "kubernetes.io/role/elb"                          = "1"
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/cluster/${var.prefix}-eks-cluster" = "shared"
+    "kubernetes.io/role/internal-elb"                 = "1"
+  }
 }
