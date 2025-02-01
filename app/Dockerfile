@@ -33,14 +33,9 @@ WORKDIR /app
 # Copy application code
 COPY --chown=trader:trader app/ ./app/
 
-# Set default environment variables
-ENV BERA_RPC="https://rpc.berachain.com" \
-    RWA_API="https://api.ondo.finance/v1/yields" \
-    CAPITAL=10000
-
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=2)"
+# HEALTHCHECK --interval=30s --timeout=3s \
+#     CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=2)"
 
 # Expose metrics port (for Prometheus)
 EXPOSE 8000
