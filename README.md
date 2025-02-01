@@ -26,6 +26,24 @@ graph TB
     J --> D
 ```
 
+```mermaid
+sequenceDiagram
+    participant L as Lambda
+    participant E as EKS
+    participant B as Blockchain
+    
+    L->>E: 提交交易请求（含风控参数）
+    E->>E: 风险评估（头寸/波动率/流动性）
+    alt 通过审核
+        E->>L: 批准交易
+        L->>B: 发送签名交易
+        B-->>L: 返回交易哈希
+    else 拒绝
+        E->>L: 返回拒绝原因
+        L->>SNS: 发送预警通知
+    end
+```
+
 
 🔍 策略详情
 1. RWA 跨市场套利

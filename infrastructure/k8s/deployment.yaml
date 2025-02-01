@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: defi-kaiser
+  namespace: defi-kaiser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: defi-kaiser
+  template:
+    metadata:
+      labels:
+        app: defi-kaiser
+    spec:
+      containers:
+      - name: defi-kaiser
+        image: 598670062096.dkr.ecr.us-west-2.amazonaws.com/defi-kaiser:latest
