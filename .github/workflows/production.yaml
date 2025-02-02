@@ -1,9 +1,9 @@
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 env:
-  AWS_ACCOUNT_ID : 499349787365
+  AWS_ACCOUNT_ID : 598670062096
   AWS_REGION : us-west-2
 
 # Permission can be added at job level or workflow level    

@@ -1,13 +1,13 @@
-# app/data.py
+# app/data/fetcher.py
 import requests
-from web3 import Web3
 import os
 from enum import Enum
 from typing import List, Dict, Optional
-from datetime import datetime, timedelta
 import time
-from cachetools import TTLCache
+from cachetools import TTLCache, cached
+from cachetools.keys import hashkey
 from dataclasses import dataclass
+import numpy as np
 
 class Chain(Enum):
     BERACHAIN = "berachain"
@@ -26,50 +26,52 @@ class PoolData:
     reward_apr: Optional[float] = None
     timestamp: Optional[int] = None
 
-class DataFetcher:
+class RWADataFetcher:
     def __init__(self):
         self.rwa_endpoint = os.getenv('RWA_API', 'https://api.ondo.finance/v1')
-        self.bera_node = os.getenv('BERA_RPC', 'https://rpc.berachain.com')
-        self.w3 = Web3(Web3.HTTPProvider(self.bera_node))
+        self.cache = TTLCache(maxsize=100, ttl=300)  # Cache for 5 minutes
 
-    def get_rwa_yields(self):
-        """Fetch tokenized RWA yields from Ondo/Centrifuge"""
+    @cached(cache=TTLCache(maxsize=10, ttl=600))
+    def get_rwa_yields(self) -> Dict[str, float]:
+        """Fetch RWA yields from Ondo/Centrifuge APIs."""
         try:
-            res = requests.get(f"{self.rwa_endpoint}/yields", timeout=3)
+            res = requests.get(f"{self.rwa_endpoint}/yields", timeout=5)
+            res.raise_for_status()
             return {item['asset']: item['apy'] for item in res.json()['data']}
         except Exception as e:
             print(f"RWA API Error: {e}")
             return {'OUSG': 0.051, 'STBT': 0.049}  # Fallback values
 
-    def get_dex_pools(self, chain: Chain):
-        """Get Berachain DEX pool data (simplified)"""
-        # In production: Use Berachain SDK or Subgraph
-        return [
-            {'pair': 'BERA/USDC', 'apr': 0.45, 'tvl': 1.2e6, 'il_risk': 0.1},
-            {'pair': 'BGT/USDC', 'apr': 0.68, 'tvl': 850e3, 'il_risk': 0.15}
-        ]
-
-    def get_defi_rates(self):
-        """Get DeFi lending rates from major protocols"""
-        # Simulated data - integrate with Aave/Compound APIs
-        return {'USDC': 0.048, 'USDT': 0.047, 'DAI': 0.049}
-    
-    def get_rwa_prices(self):
+    @cached(cache=TTLCache(maxsize=10, ttl=600))
+    def get_rwa_prices(self) -> Dict[str, float]:
         """Fetch RWA token prices from Ondo API."""
         try:
-            res = requests.get(f"{self.rwa_endpoint}/prices", timeout=3)
+            res = requests.get(f"{self.rwa_endpoint}/prices", timeout=5)
+            res.raise_for_status()
             return {item['asset']: item['price'] for item in res.json()['data']}
         except Exception as e:
             print(f"RWA API Error: {e}")
-            return {'OUSG': 1.02, 'STBT': 1.01}
+            return {'OUSG': 1.02, 'STBT': 1.01}  # Fallback values
+
+    def get_rwa_arbitrage_opportunities(self, defi_rates: Dict[str, float]) -> Dict[str, Dict]:
+        """
+        Identify RWA arbitrage opportunities by comparing yields vs DeFi rates.
+        """
+        rwa_yields = self.get_rwa_yields()
+        opportunities = {}
+        for asset, rwa_yield in rwa_yields.items():
+            spread = rwa_yield - defi_rates.get('USDC', 0.045)  # Compare vs USDC
+            if spread > 0.015:  # 1.5% minimum arbitrage
+                opportunities[asset] = {
+                    'action': 'BUY_RWA',
+                    'spread': spread,
+                    'yield': rwa_yield
+                }
+        return opportunities
 
 class DexDataFetcher:
-    # Cache pool data for 5 minutes
-    _pool_cache = TTLCache(maxsize=100, ttl=300)
-    
-    # Map your DEXes to DefiLlama protocol slugs
     DEX_PROTOCOLS = {
-        Chain.BERACHAIN: 'bex',  # Replace with actual DefiLlama slug
+        Chain.BERACHAIN: 'bex',
         Chain.ETHEREUM: 'uniswap-v3',
         Chain.BSC: 'pancakeswap-v3',
         Chain.POLYGON: 'quickswap-v3'
@@ -78,162 +80,90 @@ class DexDataFetcher:
     def __init__(self):
         self.base_url = "https://api.llama.fi"
         self.session = requests.Session()
-        # Add reasonable timeout
-        self.session.request = lambda method, url, **kwargs: \
-            requests.Session.request(self.session, method, url, timeout=10, **kwargs)
-
-    def get_dex_pools(self, chain: Chain) -> List[PoolData]:
-        """Get comprehensive pool data from DefiLlama"""
-        cache_key = f"pools_{chain.value}"
+        self.session.headers.update({'User-Agent': 'DeFi-Kaiser/1.0'})
         
-        # Check cache first
-        if cache_key in self._pool_cache:
-            return self._pool_cache[cache_key]
-
+    @cached(TTLCache(maxsize=100, ttl=300), key=lambda self, chain: hashkey(chain.value))
+    def get_dex_pools(self, chain: Chain) -> List[PoolData]:
+        """Get comprehensive pool data with enhanced caching"""
         try:
-            # Get protocol overview
-            protocol_data = self._get_protocol_data(chain)
-            
-            # Get pool-specific data
-            pools_data = self._get_pools_data(chain)
-            
-            # Get protocol yields
-            yields_data = self._get_yields_data(chain)
-
-            # Combine and process the data
-            processed_pools = self._process_pool_data(
-                pools_data, 
-                yields_data, 
-                protocol_data
-            )
-
-            # Cache the results
-            self._pool_cache[cache_key] = processed_pools
-            return processed_pools
-
+            pools = self._get_pools_data(chain)
+            yields = self._get_yields_data(chain)
+            return self._process_pool_data(pools, yields)
         except Exception as e:
-            print(f"Error fetching DefiLlama data for {chain}: {e}")
+            print(f"Failed to fetch DEX data: {e}")
             return self._get_fallback_data(chain)
 
-    def _get_protocol_data(self, chain: Chain) -> Dict:
-        """Fetch protocol overview data"""
-        protocol_slug = self.DEX_PROTOCOLS[chain]
-        url = f"{self.base_url}/protocol/{protocol_slug}"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
-
     def _get_pools_data(self, chain: Chain) -> List[Dict]:
-        """Fetch pool-specific data"""
-        protocol_slug = self.DEX_PROTOCOLS[chain]
+        """Fetch enriched pool data with volume and TVL"""
         url = f"{self.base_url}/pools/v2"
         params = {
             'chain': chain.value,
-            'protocol': protocol_slug
+            'protocol': self.DEX_PROTOCOLS[chain]
         }
-        response = self.session.get(url, params=params)
-        response.raise_for_status()
-        return response.json()['data']
+        res = self.session.get(url, params=params, timeout=10)
+        res.raise_for_status()
+        return res.json()['data']
 
-    def _get_yields_data(self, chain: Chain) -> List[Dict]:
-        """Fetch yield/APR data"""
-        protocol_slug = self.DEX_PROTOCOLS[chain]
+    def _get_yields_data(self, chain: Chain) -> Dict[str, float]:
+        """Fetch APR data with detailed breakdown"""
         url = f"{self.base_url}/yields"
         params = {
             'chain': chain.value,
-            'protocol': protocol_slug
+            'protocol': self.DEX_PROTOCOLS[chain]
         }
-        response = self.session.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
+        res = self.session.get(url, params=params, timeout=10)
+        res.raise_for_status()
+        return {item['pool']: item for item in res.json()}
 
-    def _calculate_il_risk(self, pool_data: Dict) -> float:
-        """Calculate IL risk based on volatility and volume"""
+    def _calculate_il_risk(self, pool: Dict) -> float:
+        """Enhanced IL risk calculation using multiple factors"""
         try:
-            # Get volatility if available
-            volatility = pool_data.get('volatility7d', None)
+            # Volatility from 7d price changes
+            price_change = abs(pool.get('priceChange7d', 0)) / 100
+            volume_tvl_ratio = pool.get('volume24h', 0) / max(pool.get('tvlUsd', 1), 1)
             
-            if volatility is None:
-                # Fallback: estimate from price change
-                price_change = abs(pool_data.get('priceChange7d', 0))
-                volatility = price_change / 100
-            
-            # Consider volume/TVL ratio in risk calculation
-            volume = float(pool_data.get('volume24h', 0))
-            tvl = float(pool_data.get('tvl', 1))  # avoid division by zero
-            volume_tvl_ratio = volume / tvl if tvl > 0 else 0
-            
-            # Higher volume/TVL ratio typically means lower IL risk
-            # as it indicates better liquidity and price stability
-            il_risk = (volatility * 0.7) - (min(volume_tvl_ratio, 1) * 0.3)
-            
-            # Bound the risk between 0 and 1
-            return max(min(il_risk, 1.0), 0.0)
-
+            # Combine factors using weighted average
+            return min(
+                0.5 * price_change + 
+                0.3 * (1 - np.tanh(volume_tvl_ratio)) + 
+                0.2 * (1 - pool.get('feeTier', 0.3)/10000),
+                1.0
+            )
         except Exception as e:
-            print(f"Error calculating IL risk: {e}")
-            return 0.1  # Default risk value
+            print(f"IL calculation error: {e}")
+            return 0.15
 
-    def _process_pool_data(
-        self, 
-        pools_data: List[Dict], 
-        yields_data: List[Dict], 
-        protocol_data: Dict
-    ) -> List[PoolData]:
-        """Process and combine data from different endpoints"""
-        processed_pools = []
-
-        for pool in pools_data:
+    def _process_pool_data(self, pools: List[Dict], yields: Dict) -> List[PoolData]:
+        """Process and merge data from multiple endpoints"""
+        processed = []
+        for pool in pools:
             try:
-                # Find matching yield data
-                yield_info = next(
-                    (y for y in yields_data if y.get('pool') == pool.get('pool')),
-                    {}
-                )
-
-                pool_data = PoolData(
-                    pair=pool.get('symbol', ''),
-                    tvl=float(pool.get('tvlUsd', 0)),
-                    apr=float(yield_info.get('apy', 0)),
+                yield_data = yields.get(pool['pool'], {})
+                processed.append(PoolData(
+                    pair=pool['symbol'],
+                    tvl=pool['tvlUsd'],
+                    apr=yield_data.get('apy', 0),
                     il_risk=self._calculate_il_risk(pool),
-                    volume_24h=float(pool.get('volume24h', 0)),
-                    fee_apr=float(yield_info.get('feeApy', 0)),
-                    reward_apr=float(yield_info.get('rewardApy', 0)),
+                    volume_24h=pool['volume24h'],
+                    fee_apr=yield_data.get('feeApy', 0),
+                    reward_apr=yield_data.get('rewardApy', 0),
                     timestamp=int(time.time())
-                )
-                processed_pools.append(pool_data)
-
-            except Exception as e:
-                print(f"Error processing pool {pool.get('symbol', 'unknown')}: {e}")
-                continue
-
-        return processed_pools
+                ))
+            except KeyError as e:
+                print(f"Missing key {e} in pool data")
+        return processed
 
     def _get_fallback_data(self, chain: Chain) -> List[PoolData]:
-        """Return fallback data when API calls fail"""
+        """Improved fallback data with chain-specific defaults"""
         return [
             PoolData(
-                pair='TOKEN1/TOKEN2',
-                tvl=1000000,
-                apr=0.1,
+                pair='BERA/USDC' if chain == Chain.BERACHAIN else 'ETH/USDC',
+                tvl=1e6,
+                apr=0.15,
                 il_risk=0.1,
-                volume_24h=100000,
+                volume_24h=500000,
                 fee_apr=0.05,
                 reward_apr=0.05,
                 timestamp=int(time.time())
             )
         ]
-
-    def get_historical_tvl(self, chain: Chain, days: int = 30) -> List[Dict]:
-        """Get historical TVL data"""
-        protocol_slug = self.DEX_PROTOCOLS[chain]
-        url = f"{self.base_url}/protocol/{protocol_slug}/historical"
-        params = {'days': days}
-        
-        try:
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            print(f"Error fetching historical TVL: {e}")
-            return [] 

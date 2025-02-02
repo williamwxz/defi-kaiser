@@ -1,12 +1,13 @@
 # app/main.py
-from data.fetcher import DataFetcher, Chain 
+from data.fetcher import RWADataFetcher, Chain, DexDataFetcher
 from strategies.orchestrator import StrategyOrchestrator
 from execute import TradeExecutor
 from risk.manager import RiskManager
 import time
 
 def trading_loop():
-    fetcher = DataFetcher()
+    rwa_fetcher = RWADataFetcher()
+    dex_fetcher = DexDataFetcher()
     strategy_orchestrator = StrategyOrchestrator()
     executor = TradeExecutor()
     risk_manager = RiskManager()
@@ -14,8 +15,8 @@ def trading_loop():
     while True:
         try:
             # Step 1: Fetch data
-            rwa_prices = fetcher.get_rwa_prices()
-            bera_pools = fetcher.get_dex_pools(Chain.BERACHAIN)
+            rwa_prices = rwa_fetcher.get_rwa_prices()
+            bera_pools = dex_fetcher.get_dex_pools(Chain.BERACHAIN)
 
             # Step 2: Generate signals
             signals = strategy_orchestrator.run_strategies(rwa_prices, bera_pools)

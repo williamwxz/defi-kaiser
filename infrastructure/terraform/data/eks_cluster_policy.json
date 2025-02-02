@@ -1,0 +1,48 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "cloudwatch:PutMetricData"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        },
+        {
+            "Action": [
+                "ec2:DescribeAccountAttributes",
+                "ec2:DescribeAddresses",
+                "ec2:DescribeInternetGateways"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "athena:StartQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetQueryResults",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket",
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
