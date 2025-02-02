@@ -39,7 +39,6 @@ Location: app/strategies/
 Key Strategies:
 
 ```mermaid
-Copy
 graph LR
   A[Cross-Chain Arbitrage] -->|RWA vs DeFi| B[Execution]
   C[Liquidity Mining] -->|Berachain Pools| B

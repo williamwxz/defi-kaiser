@@ -10,13 +10,13 @@ resource "aws_ecr_lifecycle_policy" "defi_kaiser_policy" {
     rules = [{
       rulePriority = 1,
       description  = "Expire untagged images after 14 days",
-      selection    = {
+      selection = {
         tagStatus   = "untagged"
         countType   = "sinceImagePushed"
         countUnit   = "days"
         countNumber = 14
       },
-      action       = {
+      action = {
         type = "expire"
       }
     }]

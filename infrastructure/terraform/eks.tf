@@ -1,39 +1,30 @@
-resource "aws_eks_cluster" "defi_kaiser" {
-  name     = "defi-kaiser-cluster"
-  role_arn = aws_iam_role.eks_cluster_role.arn
+############################### EKS Module ##########################
 
-  depends_on = [
-    aws_iam_role.eks_cluster_role
-  ]
-
-  vpc_config {
-    subnet_ids = module.vpc.private_subnets
+module "eks" {
+  source     = "./modules/eks_cluster"
+  depends_on = [module.vpc]
+  providers = {
+    aws.primary = aws.primary
   }
-}
-
-resource "aws_eks_node_group" "workers" {
-  cluster_name   = aws_eks_cluster.defi_kaiser.name
-  node_group_name = "defi_kaiser_workers"
-  node_role_arn  = aws_iam_role.eks_node_role.arn
-  # subnet_ids     = [aws_subnet.eks_subnet_a.id, aws_subnet.eks_subnet_b.id]
-  subnet_ids      = module.vpc.private_subnets
-  instance_types = [var.eks_instance_type]
-  capacity_type  = "ON_DEMAND"
-  ami_type       = "AL2_x86_64"
-  disk_size      = 20
-
-  depends_on = [
-    aws_eks_cluster.defi_kaiser,
-    aws_iam_role.eks_node_role
-  ]
-
-  scaling_config {
-    desired_size = 1
-    min_size     = 1
-    max_size     = 1
-  }
-
-  tags = {
-    "eks:cluster-name" = aws_eks_cluster.defi_kaiser.name
-  }
+  prefix                                   = var.prefix
+  account_id                               = var.account_id
+  region                                   = var.region
+  eks_cluster_policy_file                  = data.local_file.eks_cluster_policy_file.content
+  eks_ingress_policy_file                  = data.local_file.eks_ingress_policy_file.content
+  cluster_autoscaler_policy_file           = data.local_file.cluster_autoscaler_policy_file.content
+  eks_assume_role_policy_file              = data.local_file.eks_assume_role_policy_file.content
+  eks_nodegroup_assume_role_policy_file    = data.local_file.eks_nodegroup_assume_role_policy_file.content
+  aws_load_balancer_controller_policy_file = data.local_file.aws_load_balancer_controller_policy_file.content
+  eks_version                              = var.eks_version
+  eks_whitelisted_ips                      = var.eks_whitelisted_ips
+  nodegroup_ami_type                       = var.nodegroup_ami_type
+  nodegroup_capacity_type                  = var.nodegroup_capacity_type
+  nodegroup_desired_size                   = var.nodegroup_desired_size
+  nodegroup_disk_size                      = var.nodegroup_disk_size
+  nodegroup_instance_type                  = var.nodegroup_instance_type
+  nodegroup_max_size                       = var.nodegroup_max_size
+  nodegroup_min_size                       = var.nodegroup_min_size
+  nodegroup_max_unavailable                = var.nodegroup_max_unavailable
+  public_subnet_ids                        = module.vpc.public_subnets
+  private_subnet_ids                       = module.vpc.private_subnets
 }
