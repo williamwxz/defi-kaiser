@@ -3,7 +3,7 @@ from web3 import Web3
 import time
 import os
 from risk.manager import RiskManager
-from strategies.data import TradeSignal
+from strategies.models import TradeSignal
 
 class TradeExecutor:
     def __init__(self):
