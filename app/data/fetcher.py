@@ -6,7 +6,7 @@ from typing import List, Dict, Optional
 import time
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
-from dataclasses import dataclass
+from pydantic import BaseModel
 import numpy as np
 
 class Chain(Enum):
@@ -15,8 +15,7 @@ class Chain(Enum):
     BSC = "bsc"
     POLYGON = "polygon"
 
-@dataclass
-class PoolData:
+class PoolData(BaseModel):
     pair: str
     tvl: float
     apr: float
